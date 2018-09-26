@@ -4,7 +4,22 @@ from collections import Counter
 import random
 from . import _utils
 
+import requests
+
 options_max_values = 20
+
+stat_doc = \
+'''
+Finds {name} of all the values in the array
+
+Returns
+-------
+int or float
+'''
+
+def add_doc(func):
+    func.__doc__ = stat_doc.format(name=func.__name__)
+    return func
 
 class Array:
     '''
@@ -29,71 +44,62 @@ class Array:
         # Allow user to pass only an array or a list
         if isinstance(data, array):
             # TODO - check for cases where typecode is not 'b', 'q', or 'd'
-            self.data = data
+            self._data = data
         elif isinstance(data, list):
             dtype = _utils.get_dtype_of_list(data)
 
             # if there is mixed data types in the list
             # such that the first element is integer and the next float                
             try:
-                self.data = array(dtype, data)
+                self._data = array(dtype, data)
             except TypeError:
-                self.data = array('d', data)
+                self._data = array('d', data)
         else:
             raise TypeError('Array constructor only accepts lists or arrays')
         # b - boolean (1 byte integer)
         # q - interger (8 bytes)
         # d - float (8 bytes)
-        self.dtype = self.data.typecode
+        self.dtype = self._data.typecode
 
+    
+    @property
+    def data(self):
+        return self._data
+
+    # data is read only
+    # @data.setter
+    # def data(self, value):
+    #     self._data = value
+
+
+    @property
+    def dtype(self):
+        # getter
+        return self.__dict__['dtype']
+
+    #dtype is writeable for now
+    @dtype.setter
+    def dtype(self, value):
+        self.__dict__['dtype'] = value
+
+    @add_doc
     def sum(self):
-        '''
-        Sums all the values in the array
-
-        Returns
-        -------
-        int or float
-        '''
         return sum(self.data)
 
+    @add_doc
     def max(self):
-        '''
-        Finds max of all values in the array
-
-        Returns
-        -------
-        int or float
-        '''
         return max(self.data)
 
+    @add_doc
     def min(self):
-        '''
-        Finds min of all values in the array
-
-        Returns
-        -------
-        int or float
-        '''
         return min(self.data)
 
+    @add_doc
     def mean(self):
-        '''
-        Finds mean of all values in the array
-
-        Returns
-        -------
-        int or float
-        '''
         return self.sum() / len(self)
 
+    @add_doc
     def median(self):
-        '''
-        Finds median of all values in the array
-
-        Returns
-        -------
-        int or float
-        '''
         return median(self.data)
 
     def __repr__(self):
@@ -221,7 +227,7 @@ class Array:
     # This is a class method
 
     @classmethod
-    def create_random(cls, low, high, n):
+    def create_random_ints(cls, low, high, n):
         data = [random.randint(low, high) for i in range(n)]
         return cls(data)
         # does the same thing `Array(data)`
@@ -232,3 +238,76 @@ class Array:
             raise TypeError('d must be a dictionary')
         data = list(d.keys())
         return cls(data)
+
+    @classmethod
+    def create_from_list_of_strings(cls, strings):
+        data = [int(string) for string in strings]
+        return cls(data)
+
+    @classmethod
+    def create_random_uniform(cls, low, high, n):
+        data = [random.uniform(low, high) for i in range(n)]
+        return cls(data)
+
+    @classmethod
+    def return_non_array(cls):
+        return 5
+
+    @classmethod
+    def create_from_string(cls, string):
+        if not isinstance(string, str):
+            raise TypeError('Must be a string')
+        data = []
+        for s in string.split():
+            data.append(int(s))
+        return cls(data)
+
+    # Make one classmethod that generates random numbers 
+    # Make another that converts lists of strings that are digits into an array
+
+    @classmethod
+    def get_stock_data(cls, symbol, date_range='5y'):
+        BASE_URL = 'https://api.iextrading.com/1.0/'
+        end_point = f'/stock/{symbol}/chart/{date_range}'
+        url = BASE_URL + end_point
+
+        # pip3 install requests
+        req = requests.get(url)
+        data_json = req.json()
+        data = [day['close'] for day in data_json]
+        return cls(data)
+
+# Write method to write all data to a file of users choice
+
+    def write(self, file_name):
+        with open(file_name, 'w') as f:
+            for val in self:
+                f.write(f'{val}\n')
+
+
+def read_file(file_name):
+    # TODO: Convert to integer?
+    data = [float(line.strip('\n')) for line in open(file_name)]
+    return Array(data)
+
+from functools import reduce
+from operator import add
+
+def concat(arrays):
+    # input: list or tuple or Arrays
+    # output is a single concatenated Array
+    py_arrays = [arr.data for arr in arrays]
+    data = reduce(add, py_arrays)
+    return Array(data)
+
+def concat2(arrays):
+    py_arrays = [arr.data for arr in arrays]
+    return Array(sum(py_arrays[1:], py_arrays[0]))
+
+def concat3(arrays):
+    # don't use - mutates underlying data
+    arr_final = arrays[0].data
+    for arr in arrays[1:]:
+        arr_final += arr.data
+    return Array(arr_final)
+
